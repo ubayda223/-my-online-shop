@@ -563,24 +563,48 @@
             }
 
             try {
+                // Создаем контейнер для кнопки Google
+                const googleBtnContainer = document.createElement('div');
+                googleBtnContainer.id = 'google-btn-container';
+                document.querySelector('.google-signin-btn').replaceWith(googleBtnContainer);
+
                 google.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleGoogleSignIn,
                     auto_select: false,
                     cancel_on_tap_outside: true,
-                    itp_support: true // Добавляем поддержку ITP
+                    prompt_parent_id: 'google-btn-container',
+                    context: 'signin',
+                    state_cookie_domain: window.location.hostname,
+                    ux_mode: 'popup',
+                    itp_support: true
                 });
 
-                // Рендерим кнопку Google явно
+                // Рендерим кастомную кнопку Google
                 google.accounts.id.renderButton(
-                    document.querySelector('.google-signin-btn'),
-                    { theme: 'outline', size: 'large', width: '100%' }
+                    googleBtnContainer,
+                    { 
+                        type: 'standard',
+                        theme: 'outline',
+                        size: 'large',
+                        text: 'continue_with',
+                        shape: 'rectangular',
+                        logo_alignment: 'center',
+                        width: '100%'
+                    }
                 );
 
-                console.log('Google Auth инициализирован');
+                // Показываем One Tap только на главной странице
+                if (window.location.pathname === '/') {
+                    google.accounts.id.prompt();
+                }
+
+                console.log('Google Auth инициализирован успешно');
             } catch (error) {
                 console.error('Ошибка инициализации Google Auth:', error);
+                // Восстанавливаем оригинальную кнопку при ошибке
                 showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
+                document.getElementById('google-btn-container')?.remove();
             }
         }
 
