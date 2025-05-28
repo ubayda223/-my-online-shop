@@ -563,17 +563,19 @@
             }
 
             try {
-                // Initialize with FedCM support
                 google.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleGoogleSignIn,
                     auto_select: false,
                     cancel_on_tap_outside: true,
-                    use_fedcm_for_prompt: true // Enable FedCM
+                    itp_support: true // Добавляем поддержку ITP
                 });
 
-                // Check for third-party cookie support
-                checkThirdPartyCookies();
+                // Рендерим кнопку Google явно
+                google.accounts.id.renderButton(
+                    document.querySelector('.google-signin-btn'),
+                    { theme: 'outline', size: 'large', width: '100%' }
+                );
 
                 console.log('Google Auth инициализирован');
             } catch (error) {
@@ -731,7 +733,13 @@
             }
 
             try {
+                // Добавляем обработчик прерывания
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // Таймаут 5 секунд
+
                 google.accounts.id.prompt((notification) => {
+                    clearTimeout(timeoutId);
+
                     if (notification.isNotDisplayed()) {
                         const reason = notification.getNotDisplayedReason();
                         console.warn('Google Sign-In не отображается:', reason);
@@ -741,10 +749,12 @@
                         } else if (reason === 'missing_client_id') {
                             showMessage('Ошибка конфигурации Google Auth. Используйте обычную форму.', 'error');
                         } else {
-                            showMessage('Используйте обычную форму регистрации/входа', 'error');
+                            // Пробуем использовать резервный метод
+                            google.accounts.id.prompt();
                         }
                     } else if (notification.isSkippedMoment()) {
-                        console.warn('Google Sign-In пропущен:', notification.getSkippedReason());
+                        // Если пользователь пропустил вход, показываем обычную форму
+                        showMessage('Используйте обычную форму регистрации/входа', 'info');
                     }
                 });
             } catch (error) {
