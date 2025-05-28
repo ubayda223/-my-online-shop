@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Интернет-магазин</title>
+    <!-- Google OAuth API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta name="google-signin-client_id" content="286831043264-pe9tdgj4sl2cmtonov72p0q34bkneajs.apps.googleusercontent.com">
     <style>
         * {
             margin: 0;
@@ -283,13 +286,57 @@
             text-align: center;
         }
 
-        .error-message {
-            background: #ff4757;
+        .google-signin-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: #4285f4;
             color: white;
-            padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 1rem;
-            text-align: center;
+            border: none;
+            border-radius: 25px;
+            padding: 0.8rem 1.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            margin-top: 1rem;
+        }
+
+        .google-signin-btn:hover {
+            background: #3367d6;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 133, 244, 0.3);
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 1.5rem 0;
+            color: #666;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ddd;
+        }
+
+        .divider span {
+            padding: 0 1rem;
+            font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
@@ -333,6 +380,13 @@
         <!-- Секция регистрации -->
         <section id="register" class="section">
             <h2>Регистрация</h2>
+            <button class="google-signin-btn" onclick="signInWithGoogle('register')">
+                <div class="google-icon">G</div>
+                Регистрация через Google
+            </button>
+            <div class="divider">
+                <span>или</span>
+            </div>
             <form id="registerForm" onsubmit="register(event)">
                 <div class="form-group">
                     <label for="regName">Имя:</label>
@@ -361,6 +415,13 @@
         <!-- Секция входа -->
         <section id="login" class="section">
             <h2>Вход</h2>
+            <button class="google-signin-btn" onclick="signInWithGoogle('login')">
+                <div class="google-icon">G</div>
+                Войти через Google
+            </button>
+            <div class="divider">
+                <span>или</span>
+            </div>
             <form id="loginForm" onsubmit="login(event)">
                 <div class="form-group">
                     <label for="loginEmail">Email:</label>
@@ -470,6 +531,7 @@
         let cart = [];
         let users = [];
         let orders = [];
+        let googleAuth = null;
 
         // Инициализация приложения
         document.addEventListener('DOMContentLoaded', function() {
@@ -477,7 +539,181 @@
             checkAuth();
             loadProducts();
             updateCartDisplay();
+            initializeGoogleAuth();
         });
+
+        // Инициализация Google Auth
+        function initializeGoogleAuth() {
+            // Проверяем, загружен ли Google API
+            if (typeof google !== 'undefined' && google.accounts) {
+                try {
+                    google.accounts.id.initialize({
+                        client_id: '286831043264-pe9tdgj4sl2cmtonov72p0q34bkneajs.apps.googleusercontent.com', // Замените на ваш Client ID
+                        callback: handleGoogleSignIn,
+                        auto_select: false,
+                        cancel_on_tap_outside: true
+                    });
+                    
+                    console.log('Google Auth инициализирован');
+                } catch (error) {
+                    console.error('Ошибка инициализации Google Auth:', error);
+                    showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
+                }
+            } else {
+                // Если Google API не загружен, показываем предупреждение
+                console.warn('Google API не загружен');
+                setTimeout(() => {
+                    if (typeof google === 'undefined') {
+                        showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
+                    }
+                }, 3000);
+            }
+        }
+
+        // Обработка входа через Google
+        function handleGoogleSignIn(response) {
+            try {
+                // Декодируем JWT токен
+                const payload = parseJWT(response.credential);
+                
+                if (payload) {
+                    const googleUser = {
+                        id: Date.now(),
+                        name: payload.name,
+                        email: payload.email,
+                        password: 'google_auth', // Специальный маркер для Google аккаунтов
+                        phone: '', // Будет заполнено позже
+                        address: '', // Будет заполнено позже
+                        avatar: payload.picture,
+                        isGoogleUser: true,
+                        products: [],
+                        orders: []
+                    };
+
+                    // Проверяем, существует ли пользователь
+                    let existingUser = users.find(user => user.email === googleUser.email);
+                    
+                    if (existingUser) {
+                        // Обновляем данные существующего пользователя
+                        existingUser.name = googleUser.name;
+                        existingUser.avatar = googleUser.avatar;
+                        existingUser.isGoogleUser = true;
+                        currentUser = existingUser;
+                    } else {
+                        // Создаем нового пользователя
+                        users.push(googleUser);
+                        currentUser = googleUser;
+                        
+                        // Если это первый вход через Google, показываем форму для дополнительных данных
+                        showGoogleUserDetailsForm(googleUser);
+                    }
+
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    saveData();
+                    updateAuthUI();
+                    showMessage(`Добро пожаловать, ${currentUser.name}!`, 'success');
+                    showSection('shop');
+                }
+            } catch (error) {
+                console.error('Ошибка обработки Google Sign-In:', error);
+                showMessage('Ошибка входа через Google', 'error');
+            }
+        }
+
+        // Функция для парсинга JWT токена
+        function parseJWT(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (error) {
+                console.error('Ошибка парсинга JWT:', error);
+                return null;
+            }
+        }
+
+        // Показать форму для дополнительных данных Google пользователя
+        function showGoogleUserDetailsForm(user) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 15px;
+                    max-width: 400px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                ">
+                    <h3>Дополните профиль</h3>
+                    <p>Для полноценного использования магазина, пожалуйста, укажите дополнительную информацию:</p>
+                    <form id="googleUserForm">
+                        <div class="form-group">
+                            <label>Телефон:</label>
+                            <input type="tel" id="googlePhone" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Адрес:</label>
+                            <textarea id="googleAddress" rows="3" required></textarea>
+                        </div>
+                        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeGoogleModal()">Пропустить</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            document.getElementById('googleUserForm').onsubmit = function(e) {
+                e.preventDefault();
+                user.phone = document.getElementById('googlePhone').value;
+                user.address = document.getElementById('googleAddress').value;
+                saveData();
+                modal.remove();
+                showMessage('Профиль обновлен!', 'success');
+            };
+            
+            window.closeGoogleModal = function() {
+                modal.remove();
+            };
+        }
+
+        // Функция для входа через Google (вызывается кнопкой)
+        function signInWithGoogle(mode) {
+            if (typeof google !== 'undefined' && google.accounts) {
+                try {
+                    google.accounts.id.prompt((notification) => {
+                        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                            // Показываем альтернативный метод
+                            showMessage('Используйте обычную форму регистрации/входа', 'error');
+                        }
+                    });
+                } catch (error) {
+                    console.error('Ошибка Google Sign-In:', error);
+                    showMessage('Google Auth недоступен. Используйте обычную форму.', 'error');
+                }
+            } else {
+                showMessage('Google Auth не загружен. Используйте обычную форму.', 'error');
+            }
+        }
 
         // Управление секциями
         function showSection(sectionName) {
@@ -836,11 +1072,17 @@
             if (!currentUser) return;
 
             const userInfo = document.getElementById('userInfo');
+            const avatarHtml = currentUser.avatar ? 
+                `<img src="${currentUser.avatar}" alt="Avatar" style="width: 60px; height: 60px; border-radius: 50%; margin-bottom: 1rem;">` : '';
+            
             userInfo.innerHTML = `
-                <h3>${currentUser.name}</h3>
+                ${avatarHtml}
+                <h3>${currentUser.name} ${currentUser.isGoogleUser ? '<span style="color: #4285f4;">📧</span>' : ''}</h3>
                 <p><strong>Email:</strong> ${currentUser.email}</p>
-                <p><strong>Телефон:</strong> ${currentUser.phone}</p>
-                <p><strong>Адрес:</strong> ${currentUser.address}</p>
+                <p><strong>Телефон:</strong> ${currentUser.phone || 'Не указан'}</p>
+                <p><strong>Адрес:</strong> ${currentUser.address || 'Не указан'}</p>
+                ${(!currentUser.phone || !currentUser.address) ? 
+                    '<button class="btn btn-secondary" onclick="editProfile()">Дополнить профиль</button>' : ''}
             `;
 
             // Мои товары
@@ -884,6 +1126,80 @@
                     </div>
                 `).join('');
             }
+        }
+
+        // Редактирование профиля
+        function editProfile() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 15px;
+                    max-width: 400px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                ">
+                    <h3>Редактировать профиль</h3>
+                    <form id="editProfileForm">
+                        <div class="form-group">
+                            <label>Имя:</label>
+                            <input type="text" id="editName" value="${currentUser.name}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Телефон:</label>
+                            <input type="tel" id="editPhone" value="${currentUser.phone || ''}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Адрес:</label>
+                            <textarea id="editAddress" rows="3" required>${currentUser.address || ''}</textarea>
+                        </div>
+                        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                            <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            document.getElementById('editProfileForm').onsubmit = function(e) {
+                e.preventDefault();
+                currentUser.name = document.getElementById('editName').value;
+                currentUser.phone = document.getElementById('editPhone').value;
+                currentUser.address = document.getElementById('editAddress').value;
+                
+                // Обновляем в массиве пользователей
+                const userIndex = users.findIndex(u => u.id === currentUser.id);
+                if (userIndex !== -1) {
+                    users[userIndex] = currentUser;
+                }
+                
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                saveData();
+                loadUserProfile();
+                modal.remove();
+                showMessage('Профиль обновлен!', 'success');
+            };
+            
+            window.closeEditModal = function() {
+                modal.remove();
+            };
         }
 
         // Удаление товара
