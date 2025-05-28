@@ -525,6 +525,12 @@
     </div>
 
     <script>
+        // Add FedCM configuration
+        window.fedcmConfig = {
+            provider: 'https://accounts.google.com',
+            mode: 'mediated'
+        };
+        
         // Глобальные переменные
         let currentUser = null;
         let products = [];
@@ -546,12 +552,6 @@
         function initializeGoogleAuth() {
             if (typeof google === 'undefined') {
                 console.warn('Google API не загружен');
-                const googleScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-                if (googleScript) {
-                    googleScript.onerror = () => {
-                        showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
-                    };
-                }
                 return;
             }
 
@@ -563,24 +563,37 @@
             }
 
             try {
+                // Initialize with FedCM support
                 google.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleGoogleSignIn,
                     auto_select: false,
-                    cancel_on_tap_outside: true
+                    cancel_on_tap_outside: true,
+                    use_fedcm_for_prompt: true // Enable FedCM
                 });
 
-                // Добавляем обработчик ошибок
-                window.addEventListener('error', function(event) {
-                    if (event.message.includes('google')) {
-                        showMessage('Ошибка Google Auth. Используйте обычную регистрацию.', 'error');
-                    }
-                });
+                // Check for third-party cookie support
+                checkThirdPartyCookies();
 
                 console.log('Google Auth инициализирован');
             } catch (error) {
                 console.error('Ошибка инициализации Google Auth:', error);
                 showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
+            }
+        }
+
+        // Check third-party cookie support
+        function checkThirdPartyCookies() {
+            try {
+                const testCookie = 'test_third_party=1';
+                document.cookie = testCookie;
+                const cookieEnabled = document.cookie.indexOf(testCookie) !== -1;
+                
+                if (!cookieEnabled) {
+                    showMessage('Для работы Google Auth необходимо разрешить сторонние куки', 'error');
+                }
+            } catch (error) {
+                console.warn('Невозможно проверить поддержку сторонних куки');
             }
         }
 
@@ -720,8 +733,16 @@
             try {
                 google.accounts.id.prompt((notification) => {
                     if (notification.isNotDisplayed()) {
-                        console.warn('Google Sign-In не отображается:', notification.getNotDisplayedReason());
-                        showMessage('Используйте обычную форму регистрации/входа', 'error');
+                        const reason = notification.getNotDisplayedReason();
+                        console.warn('Google Sign-In не отображается:', reason);
+                        
+                        if (reason === 'browser_not_supported') {
+                            showMessage('Ваш браузер не поддерживает Google Auth. Используйте обычную форму.', 'error');
+                        } else if (reason === 'missing_client_id') {
+                            showMessage('Ошибка конфигурации Google Auth. Используйте обычную форму.', 'error');
+                        } else {
+                            showMessage('Используйте обычную форму регистрации/входа', 'error');
+                        }
                     } else if (notification.isSkippedMoment()) {
                         console.warn('Google Sign-In пропущен:', notification.getSkippedReason());
                     }
