@@ -552,60 +552,74 @@
         function initializeGoogleAuth() {
             if (typeof google === 'undefined') {
                 console.warn('Google API не загружен');
+                document.querySelectorAll('.google-signin-btn').forEach(btn => {
+                    btn.style.display = 'none';
+                });
                 return;
             }
 
-            const clientId = document.querySelector('meta[name="google-signin-client_id"]').content;
-            if (!clientId) {
-                console.error('Google client ID не найден');
-                showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
-                return;
-            }
+            checkBrowserCompatibility();
 
             try {
-                // Создаем контейнер для кнопки Google
-                const googleBtnContainer = document.createElement('div');
-                googleBtnContainer.id = 'google-btn-container';
-                document.querySelector('.google-signin-btn').replaceWith(googleBtnContainer);
+                const clientId = document.querySelector('meta[name="google-signin-client_id"]').content;
+                if (!clientId) {
+                    throw new Error('Google client ID не найден');
+                }
 
                 google.accounts.id.initialize({
                     client_id: clientId,
                     callback: handleGoogleSignIn,
                     auto_select: false,
                     cancel_on_tap_outside: true,
+                    itp_support: true,
+                    context: 'use',
+                    // Добавляем поддержку для разных браузеров
                     prompt_parent_id: 'google-btn-container',
-                    context: 'signin',
-                    state_cookie_domain: window.location.hostname,
-                    ux_mode: 'popup',
-                    itp_support: true
+                    state_cookie_domain: 'none',
+                    use_fedcm_for_prompt: true
                 });
 
-                // Рендерим кастомную кнопку Google
-                google.accounts.id.renderButton(
-                    googleBtnContainer,
-                    { 
-                        type: 'standard',
-                        theme: 'outline',
-                        size: 'large',
-                        text: 'continue_with',
-                        shape: 'rectangular',
-                        logo_alignment: 'center',
-                        width: '100%'
-                    }
-                );
+                // Создаем кнопку входа в более совместимом формате
+                document.querySelectorAll('.google-signin-btn').forEach(btn => {
+                    btn.onclick = function() {
+                        try {
+                            google.accounts.id.prompt((notification) => {
+                                if (notification.isNotDisplayed()) {
+                                    handleAuthError(notification.getNotDisplayedReason());
+                                }
+                            });
+                        } catch (error) {
+                            handleAuthError('browser_error');
+                        }
+                    };
+                });
 
-                // Показываем One Tap только на главной странице
-                if (window.location.pathname === '/') {
-                    google.accounts.id.prompt();
-                }
-
-                console.log('Google Auth инициализирован успешно');
             } catch (error) {
                 console.error('Ошибка инициализации Google Auth:', error);
-                // Восстанавливаем оригинальную кнопку при ошибке
-                showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
-                document.getElementById('google-btn-container')?.remove();
+                handleAuthError('init_error');
             }
+        }
+
+        // Проверка совместимости браузера
+        function checkBrowserCompatibility() {
+            const isYandexBrowser = navigator.userAgent.indexOf('YaBrowser') !== -1;
+            if (isYandexBrowser) {
+                showMessage('В Яндекс.Браузере рекомендуется использовать обычную форму входа. Для входа через Google используйте Chrome или Firefox.', 'info');
+            }
+        }
+
+        // Обработка ошибок авторизации
+        function handleAuthError(reason) {
+            const messages = {
+                'browser_not_supported': 'Ваш браузер не поддерживает вход через Google. Используйте обычную форму входа.',
+                'missing_client_id': 'Ошибка конфигурации. Используйте обычную форму входа.',
+                'third_party_cookies_blocked': 'Для входа через Google необходимо разрешить сторонние куки.',
+                'browser_error': 'Ошибка браузера. Попробуйте использовать Chrome или Firefox.',
+                'init_error': 'Не удалось инициализировать вход через Google. Используйте обычную форму входа.',
+                'popup_blocked': 'Пожалуйста, разрешите всплывающие окна для входа через Google.'
+            };
+            
+            showMessage(messages[reason] || 'Произошла ошибка. Используйте обычную форму входа.', 'error');
         }
 
         // Check third-party cookie support
