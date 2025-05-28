@@ -544,29 +544,36 @@
 
         // Инициализация Google Auth
         function initializeGoogleAuth() {
-            // Проверяем, загружен ли Google API
-            if (typeof google !== 'undefined' && google.accounts) {
-                try {
-                    google.accounts.id.initialize({
-                        client_id: '286831043264-pe9tdgj4sl2cmtonov72p0q34bkneajs.apps.googleusercontent.com', // Замените на ваш Client ID
-                        callback: handleGoogleSignIn,
-                        auto_select: false,
-                        cancel_on_tap_outside: true
-                    });
-                    
-                    console.log('Google Auth инициализирован');
-                } catch (error) {
-                    console.error('Ошибка инициализации Google Auth:', error);
-                    showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
-                }
-            } else {
-                // Если Google API не загружен, показываем предупреждение
+            if (typeof google === 'undefined') {
                 console.warn('Google API не загружен');
-                setTimeout(() => {
-                    if (typeof google === 'undefined') {
+                const googleScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+                if (googleScript) {
+                    googleScript.onerror = () => {
                         showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
+                    };
+                }
+                return;
+            }
+
+            try {
+                google.accounts.id.initialize({
+                    client_id: '286831043264-pe9tdgj4sl2cmtonov72p0q34bkneajs.apps.googleusercontent.com',
+                    callback: handleGoogleSignIn,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+
+                // Добавляем обработчик ошибок
+                window.addEventListener('error', function(event) {
+                    if (event.message.includes('google')) {
+                        showMessage('Ошибка Google Auth. Используйте обычную регистрацию.', 'error');
                     }
-                }, 3000);
+                });
+
+                console.log('Google Auth инициализирован');
+            } catch (error) {
+                console.error('Ошибка инициализации Google Auth:', error);
+                showMessage('Google Auth недоступен. Используйте обычную регистрацию.', 'error');
             }
         }
 
@@ -698,20 +705,23 @@
 
         // Функция для входа через Google (вызывается кнопкой)
         function signInWithGoogle(mode) {
-            if (typeof google !== 'undefined' && google.accounts) {
-                try {
-                    google.accounts.id.prompt((notification) => {
-                        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                            // Показываем альтернативный метод
-                            showMessage('Используйте обычную форму регистрации/входа', 'error');
-                        }
-                    });
-                } catch (error) {
-                    console.error('Ошибка Google Sign-In:', error);
-                    showMessage('Google Auth недоступен. Используйте обычную форму.', 'error');
-                }
-            } else {
-                showMessage('Google Auth не загружен. Используйте обычную форму.', 'error');
+            if (typeof google === 'undefined' || !google.accounts) {
+                showMessage('Google Auth не доступен. Используйте обычную форму.', 'error');
+                return;
+            }
+
+            try {
+                google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed()) {
+                        console.warn('Google Sign-In не отображается:', notification.getNotDisplayedReason());
+                        showMessage('Используйте обычную форму регистрации/входа', 'error');
+                    } else if (notification.isSkippedMoment()) {
+                        console.warn('Google Sign-In пропущен:', notification.getSkippedReason());
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка Google Sign-In:', error);
+                showMessage('Используйте обычную форму регистрации/входа', 'error');
             }
         }
 
@@ -1243,7 +1253,7 @@
                             description: 'Новый смартфон с отличной камерой и долгим временем работы',
                             price: 25000,
                             category: 'electronics',
-                            image: 'https://via.placeholder.com/200x200/4A90E2/FFFFFF?text=Samsung',
+                            image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzRBOTBFMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiNGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TYW1zdW5nPC90ZXh0Pjwvc3ZnPg==',
                             sellerId: 0,
                             sellerName: 'Магазин техники'
                         },
@@ -1253,7 +1263,7 @@
                             description: 'Классические джинсы высокого качества',
                             price: 4500,
                             category: 'clothing',
-                            image: 'https://via.placeholder.com/200x200/50C878/FFFFFF?text=Jeans',
+                            image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzUwQzg3OCIvc3ZnPg==',
                             sellerId: 0,
                             sellerName: 'Модный бутик'
                         },
@@ -1263,7 +1273,7 @@
                             description: 'Учебник по современному программированию',
                             price: 1200,
                             category: 'books',
-                            image: 'https://via.placeholder.com/200x200/FF6B6B/FFFFFF?text=Book',
+                            image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI0ZGNjZCNjYiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIwIiBmaWxsPSIjRkZGIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Vc3VhbG5lPC90ZXh0Pjwvc3ZnPg==',
                             sellerId: 0,
                             sellerName: 'Книжный магазин'
                         },
@@ -1273,7 +1283,7 @@
                             description: 'Автоматическая кофеварка для дома',
                             price: 15000,
                             category: 'home',
-                            image: 'https://via.placeholder.com/200x200/8B4513/FFFFFF?text=Coffee',
+                            image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzhCNDY1MyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiNGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Db2ZlZXJ2YW5rYTwvdGV4dD48L3N2Zz4=',
                             sellerId: 0,
                             sellerName: 'Дом и сад'
                         },
@@ -1283,7 +1293,7 @@
                             description: 'Спортивные кроссовки для бега',
                             price: 7800,
                             category: 'sports',
-                            image: 'https://via.placeholder.com/200x200/FF4500/FFFFFF?text=Nike',
+                            image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI0ZGNjZCNjYiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIwIiBmaWxsPSIjRkZGIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TcG9ydC1zdG9yZSBCZWdpbm5pbmc8L3RleHQ+PC9zdmc+',
                             sellerId: 0,
                             sellerName: 'Спортивный магазин'
                         }
